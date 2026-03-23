@@ -6,7 +6,7 @@ from telegram.ext import (
     ContextTypes,
     filters
 )
-TOKEN = "7692317063:AAGWWushWTGhPY_QQUy55kX1N0KPq_Zz11M"
+TOKEN = "8417018128:AAHAm_2-OP22yzWv3VFPvOGT6-HTNgmspT4"
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
