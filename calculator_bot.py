@@ -1,11 +1,5 @@
 from telegram import Update
-from telegram.ext import (
-    ApplicationBuilder,
-    CommandHandler,
-    MessageHandler,
-    ContextTypes,
-    filters
-)
+from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters
 import os
 import asyncio
 from flask import Flask
@@ -46,31 +40,21 @@ async def calculate(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def run_bot():
     """Run the Telegram bot"""
-    # Create new event loop for this thread
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
+    # Use Application instead of ApplicationBuilder
+    application = Application.builder().token(TOKEN).build()
     
-    bot_app = ApplicationBuilder().token(TOKEN).build()
-    bot_app.add_handler(CommandHandler("start", start))
-    bot_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, calculate))
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, calculate))
     
     print("🤖 Bot is running...")
     
-    # Run the bot with the event loop
-    loop.run_until_complete(bot_app.initialize())
-    loop.run_until_complete(bot_app.start())
-    
-    try:
-        loop.run_forever()
-    except KeyboardInterrupt:
-        pass
-    finally:
-        loop.run_until_complete(bot_app.stop())
-        loop.run_until_complete(bot_app.shutdown())
+    # Run the bot with polling
+    application.run_polling()
 
 def run_flask():
     """Run Flask server for Render"""
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
+    port = int(os.environ.get('PORT', 10000))
+    app.run(host='0.0.0.0', port=port)
 
 if __name__ == "__main__":
     # Start Flask in a separate thread
@@ -80,3 +64,4 @@ if __name__ == "__main__":
     
     # Run the bot
     run_bot()
+    
