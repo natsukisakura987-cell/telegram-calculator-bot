@@ -73,7 +73,7 @@ def solve_math_problem(query):
             return f"📤 *Expanded:*\n`{expr_str}`\n= `{result}`"
         
         # Trigonometry with degrees
-        elif any(trig in query for trig in ['sin', 'cos', 'tan', 'sin(', 'cos(', 'tan(']):
+        elif any(trig in query for trig in ['sin', 'cos', 'tan']):
             match = re.search(r'(sin|cos|tan)\((\d+)\)', query)
             if match:
                 func = match.group(1)
@@ -89,8 +89,7 @@ def solve_math_problem(query):
         
         # Basic arithmetic
         else:
-            # Check if it's a simple arithmetic expression
-            allowed = "0123456789+-*/(). **"
+            allowed = "0123456789+-*/(). "
             if all(c in allowed or c.isspace() for c in query):
                 result = eval(query)
                 return f"✅ *Result:*\n`{query}`\n= `{result}`"
@@ -100,12 +99,11 @@ def solve_math_problem(query):
                        "`differentiate x^2`\n"
                        "`integrate 2x`\n"
                        "`solve x^2 - 4 = 0`\n"
-                       "`simplify (x+1)^2`\n"
                        "`sin(30)`\n"
                        "`5 + 3`")
     
     except Exception as e:
-        return f"❌ *Error:* {str(e)}\n\n*Try rephrasing your problem*"
+        return f"❌ *Error:* {str(e)}"
 
 async def calculate(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_input = update.message.text
@@ -114,16 +112,7 @@ async def calculate(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 if __name__ == "__main__":
     print("🤖 Advanced Math Bot is starting...")
-    print("📐 Trigonometry ✓")
-    print("📊 Calculus (Derivatives & Integrals) ✓")
-    print("🔢 Algebra (Solve, Simplify, Factor, Expand) ✓")
-    
-    # Create application
     app = Application.builder().token(TOKEN).build()
-    
-    # Add handlers
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, calculate))
-    
-    # Start the bot
     app.run_polling()
