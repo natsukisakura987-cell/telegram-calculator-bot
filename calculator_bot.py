@@ -26,13 +26,13 @@ def solve_math(expr):
     try:
         expr = expr.strip()
         
-        # Convert √ to sqrt
-        expr = expr.replace('√', 'sqrt')
+        # Fix: Convert √16 to sqrt(16)
+        expr = re.sub(r'√(\d+)', r'sqrt(\1)', expr)
         
         # Convert ^ to **
         expr = expr.replace('^', '**')
         
-        # Fix: Add * between number and variable (2x -> 2*x)
+        # Add * between number and variable (2x -> 2*x)
         expr = re.sub(r'(\d+)([a-zA-Z])', r'\1*\2', expr)
         
         # 1. Equations like 3x+2=5 or 2x+cos(60)=5
@@ -66,7 +66,14 @@ def solve_math(expr):
                 solutions = sp.solve(eq, x)
                 return f"✅ *Solution:* `{expr}`\n\nx = `{solutions}`"
         
-        # 2. Replace trig functions with numeric values
+        # 2. Handle sqrt function
+        def sqrt_repl(m):
+            num = float(m.group(1))
+            return str(math.sqrt(num))
+        
+        expr_with_sqrt = re.sub(r'sqrt\((\d+(?:\.\d+)?)\)', sqrt_repl, expr)
+        
+        # 3. Replace trig functions with numeric values
         def trig_repl(m):
             func = m.group(1)
             deg = float(m.group(2))
@@ -79,17 +86,10 @@ def solve_math(expr):
                 return str(math.tan(rad))
             return m.group(0)
         
-        processed = re.sub(r'(sin|cos|tan)\((\d+(?:\.\d+)?)\)', trig_repl, expr)
+        expr_with_trig = re.sub(r'(sin|cos|tan)\((\d+(?:\.\d+)?)\)', trig_repl, expr_with_sqrt)
         
-        # Handle sqrt
-        def sqrt_repl(m):
-            num = float(m.group(1))
-            return str(math.sqrt(num))
-        
-        processed = re.sub(r'sqrt\((\d+(?:\.\d+)?)\)', sqrt_repl, processed)
-        
-        # 3. Evaluate the whole expression numerically
-        result = eval(processed)
+        # 4. Evaluate the whole expression
+        result = eval(expr_with_trig)
         
         # Format result - remove .0 if it's a whole number
         if isinstance(result, float) and result.is_integer():
