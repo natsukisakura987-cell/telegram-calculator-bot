@@ -3,6 +3,8 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 import sympy as sp
 import math
 import re
+import asyncio
+import os
 
 TOKEN = "8417018128:AAHAm_2-OP22yzWv3VFPvOGT6-HTNgmspT4"
 
@@ -110,9 +112,14 @@ async def calculate(update: Update, context: ContextTypes.DEFAULT_TYPE):
     result = solve_math_problem(user_input)
     await update.message.reply_text(result, parse_mode="Markdown")
 
-if __name__ == "__main__":
+def main():
     print("🤖 Advanced Math Bot is starting...")
     app = Application.builder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, calculate))
+    
+    # Use run_polling with the correct event loop handling for Render
     app.run_polling()
+
+if __name__ == "__main__":
+    main()
