@@ -37,9 +37,8 @@ def solve_math(expr):
             solutions = sp.solve(equation, x)
             return f"🔢 *Solution:*\n`{expr}`\n\nx = `{solutions}`"
         
-        # 2. Calculus: d/dx, dy/dx, derivative
+        # 2. Calculus: d/dx
         if expr.startswith('d/') or 'derivative' in expr.lower():
-            # Parse d/dx x^2 or derivative of x^2
             match = re.search(r'[dD]/[dD][xX]\s*(.+)', expr)
             if match:
                 func = match.group(1).strip()
@@ -50,8 +49,8 @@ def solve_math(expr):
             result = sp.diff(f, x)
             return f"📈 *Derivative:*\n`d/dx ({func})`\n= `{result}`"
         
-        # 3. Integration: ∫ x^2 dx, integrate x^2
-        if expr.startswith('∫') or 'integral' in expr.lower() or 'integrate' in expr.lower():
+        # 3. Integration
+        if 'integral' in expr.lower() or 'integrate' in expr.lower() or '∫' in expr:
             match = re.search(r'[∫]?\s*([^dx]+)\s*dx', expr)
             if match:
                 func = match.group(1).strip()
@@ -62,51 +61,54 @@ def solve_math(expr):
             result = sp.integrate(f, x)
             return f"📊 *Integral:*\n`∫ {func} dx`\n= `{result} + C`"
         
-        # 4. Trigonometry: sin(30), cos(45), tan(60)
-        trig_match = re.match(r'(sin|cos|tan)\((\d+)\)', expr.lower())
-        if trig_match:
-            func = trig_match.group(1)
-            angle = float(trig_match.group(2))
-            rad = math.radians(angle)
-            if func == 'sin':
-                result = math.sin(rad)
-            elif func == 'cos':
-                result = math.cos(rad)
-            else:
-                result = math.tan(rad)
-            return f"📐 *{func}({angle}°)*\n= `{result:.6f}`"
+        # 4. Handle expressions with trig functions and operations
+        # Replace trig functions with sympy format
+        processed = expr.lower()
         
-        # 5. Simplify expression: x^2 + 2x + 1
-        # Try to simplify first
-        f = sp.sympify(expr)
-        simplified = sp.simplify(f)
+        # Convert sin(30) to sin(30*pi/180) for degrees
+        def convert_trig(match):
+            func = match.group(1)
+            angle = match.group(2)
+            return f"{func}({angle}*pi/180)"
         
-        # 6. Factor if possible
-        factored = sp.factor(f)
+        # Apply conversion to all trig functions
+        processed = re.sub(r'(sin|cos|tan)\((\d+)\)', convert_trig, processed)
         
-        # 7. Expand if needed
-        expanded = sp.expand(f)
-        
-        # Build response
-        response = f"🧮 *Expression:* `{expr}`\n\n"
-        response += f"🔄 *Simplified:* `{simplified}`\n"
-        
-        if factored != simplified:
-            response += f"🔍 *Factored:* `{factored}`\n"
-        if expanded != simplified:
-            response += f"📤 *Expanded:* `{expanded}`\n"
-        
-        # Try to evaluate if it's numeric
+        # Try to evaluate as a complete expression
         try:
-            numeric = float(sp.N(f))
-            response += f"🔢 *Value:* `{numeric}`\n"
+            # Create symbols
+            x = sp.Symbol('x')
+            # Parse the expression
+            f = sp.sympify(processed)
+            # Evaluate numerically if possible
+            result_numeric = float(sp.N(f))
+            return f"✅ *Result:*\n`{expr}`\n= `{result_numeric}`"
         except:
-            pass
-            
-        return response
+            # If can't evaluate numerically, try simplifying
+            try:
+                x = sp.Symbol('x')
+                f = sp.sympify(processed)
+                simplified = sp.simplify(f)
+                return f"🧮 *Expression:* `{expr}`\n\n🔄 *Simplified:* `{simplified}`"
+            except:
+                pass
+        
+        # 5. Fallback - general expression
+        try:
+            f = sp.sympify(expr)
+            simplified = sp.simplify(f)
+            result_numeric = float(sp.N(f))
+            return f"✅ *Result:*\n`{expr}`\n= `{result_numeric}`"
+        except:
+            try:
+                f = sp.sympify(expr)
+                simplified = sp.simplify(f)
+                return f"🧮 *Expression:* `{expr}`\n\n🔄 *Simplified:* `{simplified}`"
+            except Exception as e:
+                return f"❌ *Error:* {str(e)}\n\n*Try:*\n`3x + 2 = 5`\n`sin(30) + cos(60)`\n`d/dx x^2`"
         
     except Exception as e:
-        return f"❌ *Error:* {str(e)}\n\n*Try:*\n`3x + 2 = 5`\n`x^2 + 2x + 1`\n`sin(30)`\n`d/dx x^2`"
+        return f"❌ *Error:* {str(e)}\n\n*Try:*\n`3x + 2 = 5`\n`sin(30) + cos(60)`\n`d/dx x^2`"
 
 # ---------- Telegram Handlers ----------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -115,9 +117,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Just type any math expression!\n\n"
         "*Examples:*\n"
         "`3x + 2 = 5` → solve equation\n"
+        "`sin(30) + cos(60)` → calculate\n"
         "`x^2 + 2x + 1` → simplify\n"
         "`d/dx x^2` → differentiate\n"
-        "`sin(30)` → trigonometry\n"
         "`5 + 3 * 2` → calculate\n\n"
         "No commands needed! Just type and get answer.",
         parse_mode="Markdown"
@@ -143,4 +145,4 @@ def main():
     app.run_polling()
 
 if __name__ == "__main__":
-    main()
+    main())
