@@ -4,7 +4,9 @@ import math
 import re
 import os
 import threading
+import time
 from http.server import HTTPServer, BaseHTTPRequestHandler
+import requests
 
 TOKEN = "8417018128:AAHAm_2-OP22yzWv3VFPvOGT6-HTNgmspT4"
 
@@ -20,7 +22,18 @@ def run_http_server():
     server = HTTPServer(('0.0.0.0', port), HealthHandler)
     server.serve_forever()
 
-# Simple math solver
+# Keep bot awake by pinging itself every 10 minutes
+def keep_awake():
+    while True:
+        time.sleep(600)  # 10 minutes
+        try:
+            # Ping itself to stay awake
+            url = f"http://localhost:{os.environ.get('PORT', 10000)}"
+            requests.get(url, timeout=5)
+            print("🔄 Keep-alive ping sent")
+        except:
+            pass
+
 def solve_math(expr):
     try:
         expr = expr.strip()
@@ -63,7 +76,6 @@ def solve_math(expr):
             left = parts[0]
             right = parts[1]
             
-            # Simple linear equation solver
             for x_val in range(-100, 101):
                 test_left = left.replace('x', str(x_val))
                 test_right = right.replace('x', str(x_val))
@@ -85,7 +97,6 @@ def solve_math(expr):
     except Exception as e:
         return f"❌ Error: {str(e)}"
 
-# Telegram handlers
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "🧮 Math Bot\n\n"
@@ -102,17 +113,19 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def main():
     # Start HTTP server
-    thread = threading.Thread(target=run_http_server, daemon=True)
-    thread.start()
+    threading.Thread(target=run_http_server, daemon=True).start()
+    
+    # Start keep-alive thread (prevents sleeping)
+    threading.Thread(target=keep_awake, daemon=True).start()
     
     print("🤖 Bot is starting...")
+    print("🔄 Keep-alive active - bot will stay awake!")
     
     # Start bot
     app = Application.builder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
     
-    # This will keep the bot running
     app.run_polling()
 
 if __name__ == "__main__":
