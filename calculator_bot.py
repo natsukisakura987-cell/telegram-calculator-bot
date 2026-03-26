@@ -5,6 +5,7 @@ import re
 import os
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
+import sympy as sp
 
 TOKEN = "8417018128:AAHAm_2-OP22yzWv3VFPvOGT6-HTNgmspT4"
 
@@ -20,137 +21,79 @@ def run_http_server():
     server = HTTPServer(('0.0.0.0', port), HealthHandler)
     server.serve_forever()
 
-def solve_equation(equation):
-    """Solve equations like 2x/3+4=x+2"""
-    try:
-        # Split into left and right
-        left, right = equation.split('=')
-        
-        # Function to evaluate expression for a given x
-        def evaluate(expr, x_val):
-            # Replace x with value
-            expr_val = expr.replace('x', f'({x_val})')
-            # Handle fractions like 2x/3
-            expr_val = expr_val.replace('/', '/')
-            try:
-                return eval(expr_val)
-            except:
-                return None
-        
-        # Find solution by binary search
-        # First, find a range where left - right changes sign
-        step = 1
-        found_range = False
-        lower_bound = -100
-        upper_bound = 100
-        lower_val = evaluate(left, lower_bound) - evaluate(right, lower_bound)
-        
-        if lower_val is None:
-            return None
-        
-        for x_test in range(-100, 101):
-            x_val = x_test
-            diff = evaluate(left, x_val) - evaluate(right, x_val)
-            if diff is None:
-                continue
-            if diff * lower_val < 0:  # Sign change found
-                found_range = True
-                upper_bound = x_val
-                break
-            lower_val = diff
-            lower_bound = x_val
-        
-        if not found_range:
-            # Try with more precision
-            for x_test in range(-1000, 1001):
-                x_val = x_test / 10
-                diff = evaluate(left, x_val) - evaluate(right, x_val)
-                if diff is None:
-                    continue
-                if abs(diff) < 0.0001:
-                    return x_val
-                if diff * lower_val < 0:
-                    found_range = True
-                    upper_bound = x_val
-                    break
-                lower_val = diff
-                lower_bound = x_val
-        
-        if found_range:
-            # Binary search for exact solution
-            for _ in range(50):  # 50 iterations for precision
-                mid = (lower_bound + upper_bound) / 2
-                diff = evaluate(left, mid) - evaluate(right, mid)
-                if diff is None:
-                    break
-                if abs(diff) < 0.0001:
-                    return mid
-                if diff * (evaluate(left, lower_bound) - evaluate(right, lower_bound)) > 0:
-                    lower_bound = mid
-                else:
-                    upper_bound = mid
-            return (lower_bound + upper_bound) / 2
-        
-        return None
-        
-    except Exception as e:
-        return None
-
 def solve_math(expr):
     try:
         expr = expr.strip()
         original = expr
         
-        # Handle special symbols
+        # Preprocess: convert √ to sqrt, ^ to **
         expr = expr.replace('√', 'sqrt')
         expr = expr.replace('^', '**')
         
-        # Handle trig functions
-        def trig_calc(m):
+        # Convert trig: sin(30) -> sin(30*pi/180) for degrees
+        def trig_to_rad(m):
             func = m.group(1)
-            deg = float(m.group(2))
-            rad = math.radians(deg)
-            if func == 'sin':
-                return str(round(math.sin(rad), 6))
-            if func == 'cos':
-                return str(round(math.cos(rad), 6))
-            if func == 'tan':
-                return str(round(math.tan(rad), 6))
-            return m.group(0)
+            deg = int(m.group(2))
+            rad = deg * math.pi / 180
+            return f"{func}({rad})"
         
-        # Replace trig with values
-        expr = re.sub(r'(sin|cos|tan)\((\d+)\)', trig_calc, expr)
+        expr = re.sub(r'(sin|cos|tan)\((\d+)\)', trig_to_rad, expr)
         
-        # Handle sqrt
-        def sqrt_calc(m):
-            num = float(m.group(1))
-            return str(math.sqrt(num))
-        
-        expr = re.sub(r'sqrt\((\d+)\)', sqrt_calc, expr)
+        # Handle sqrt: sqrt(16) -> sqrt(16)
+        # No conversion needed, sympy understands sqrt
         
         # Check if it's an equation
         if '=' in expr:
-            # Solve the equation
-            solution = solve_equation(expr)
+            left, right = expr.split('=', 1)
+            x = sp.Symbol('x')
             
-            if solution is not None:
-                # Format the solution nicely
-                if abs(solution - round(solution)) < 0.0001:
-                    solution = int(round(solution))
+            try:
+                # Parse both sides
+                left_expr = sp.sympify(left)
+                right_expr = sp.sympify(right)
+                
+                # Create equation and solve
+                equation = sp.Eq(left_expr, right_expr)
+                solutions = sp.solve(equation, x)
+                
+                if solutions:
+                    # Get first solution
+                    sol = solutions[0]
+                    
+                    # Convert to nice format
+                    if sol.is_integer:
+                        return f"✅ {original}\n\nx = {int(sol)}"
+                    else:
+                        # Round to 4 decimal places
+                        float_val = float(sol)
+                        if abs(float_val - round(float_val, 4)) < 0.0001:
+                            float_val = round(float_val, 4)
+                        return f"✅ {original}\n\nx = {float_val}"
                 else:
-                    solution = round(solution, 4)
-                return f"✅ {original}\n\nx = {solution}"
-            else:
-                return f"✅ {original}\n\nx = (could not solve)"
+                    return f"✅ {original}\n\nx = (could not solve)"
+                    
+            except Exception as e:
+                return f"❌ Error: {str(e)}\n\nTry: 3x+2=5"
         
-        # For non-equations, just calculate
-        result = eval(expr)
-        if isinstance(result, float) and result.is_integer():
-            result = int(result)
-        return f"✅ {original}\n= {result}"
+        # For non-equations, evaluate
+        x = sp.Symbol('x')
+        result = sp.sympify(expr)
+        
+        # If result has x, simplify
+        if result.has(x):
+            simplified = sp.simplify(result)
+            return f"✅ {original}\n= {simplified}"
+        else:
+            # Numeric result
+            numeric = float(result)
+            if numeric.is_integer():
+                numeric = int(numeric)
+            else:
+                numeric = round(numeric, 6)
+            return f"✅ {original}\n= {numeric}"
         
     except Exception as e:
-        return f"❌ Error: {str(e)}\n\nTry:\n3x+2=5\n2x/3+4=x+2\nx/2+3=7"
+        return f"❌ Error: {str(e)}\n\nTry:\n3x+2=5\n2x/3+4=x+2"
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
@@ -160,7 +103,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• 2x/3+4=x+2\n"
         "• x/2+3=7\n"
         "• 2x+cos(60)=5\n"
-        "• √100+2^3-sin(30)"
+        "• √100+2^3-sin(30)\n\n"
+        "Bot by @KanKann_calc_bot"
     )
 
 async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -168,10 +112,12 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(result)
 
 def main():
+    # Start HTTP server
     threading.Thread(target=run_http_server, daemon=True).start()
     
     print("🤖 Bot is starting...")
     
+    # Start bot
     app = Application.builder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
