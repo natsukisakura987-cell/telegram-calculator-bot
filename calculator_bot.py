@@ -25,8 +25,11 @@ def solve_math(expr):
         expr = expr.strip()
         original = expr
         
-        # Convert √ to sqrt
-        expr = expr.replace('√', 'sqrt')
+        # CRITICAL FIX: Convert √100 to sqrt(100) first
+        # Handle √ followed by number (no parentheses)
+        expr = re.sub(r'√(\d+)', r'sqrt(\1)', expr)
+        # Also handle √ with decimal
+        expr = re.sub(r'√(\d+\.\d+)', r'sqrt(\1)', expr)
         
         # Convert ^ to **
         expr = expr.replace('^', '**')
@@ -47,7 +50,7 @@ def solve_math(expr):
         # Apply trig replacement
         expr = re.sub(r'(sin|cos|tan)\((\d+)\)', trig_calc, expr)
         
-        # Handle sqrt
+        # Handle sqrt after converting √ to sqrt()
         def sqrt_calc(m):
             num = float(m.group(1))
             return str(math.sqrt(num))
@@ -63,17 +66,11 @@ def solve_math(expr):
             left = parts[0]
             right = parts[1]
             
-            # Solve for x using algebraic method
             try:
-                # Evaluate the right side
                 right_val = eval(right)
-                
-                # Left side should be in form: ax + b
                 left = left.replace(' ', '')
                 
-                # Find coefficient of x
                 import re as re_module
-                # Pattern to match ax or ax+b or ax-b
                 match = re_module.match(r'([+-]?\d*\.?\d*)\*?x([+-].*)?', left)
                 if match:
                     coeff_str = match.group(1)
@@ -90,10 +87,8 @@ def solve_math(expr):
                     else:
                         const = 0
                     
-                    # Solve: coeff * x + const = right_val
                     x_solution = (right_val - const) / coeff
                     
-                    # Format nicely
                     if abs(x_solution - round(x_solution, 2)) < 0.0001:
                         x_solution = round(x_solution, 2)
                     if isinstance(x_solution, float) and x_solution.is_integer():
@@ -103,7 +98,7 @@ def solve_math(expr):
             except Exception as e:
                 pass
             
-            # Fallback: brute force method
+            # Fallback brute force
             solutions = []
             for x_val in range(-1000, 1001):
                 x_float = x_val / 10
@@ -142,8 +137,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• 3x+2=5\n"
         "• 2x+cos(60)=5\n"
         "• √16+2\n"
+        "• √100+2^3-sin(30)\n"
         "• sin(30)+cos(60)\n"
-        "• (√25)+sin(30)\n"
         "• 2^3+4"
     )
 
@@ -152,12 +147,10 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(result)
 
 def main():
-    # Start HTTP server
     threading.Thread(target=run_http_server, daemon=True).start()
     
     print("🤖 Bot is starting...")
     
-    # Start bot
     app = Application.builder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
