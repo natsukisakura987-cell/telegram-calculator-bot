@@ -31,7 +31,7 @@ def solve_math(expr):
         # Convert ^ to **
         expr = expr.replace('^', '**')
         
-        # Handle trig functions FIRST
+        # Handle trig functions
         def trig_calc(m):
             func = m.group(1)
             deg = float(m.group(2))
@@ -65,57 +65,48 @@ def solve_math(expr):
             
             # Solve for x using algebraic method
             try:
-                # Try to solve by isolating x
-                # For simple equation like 2x+0.5=5
-                # Convert to 2x = 5 - 0.5 = 4.5, then x = 4.5/2 = 2.25
-                
-                # First, evaluate the right side if it contains numbers
+                # Evaluate the right side
                 right_val = eval(right)
                 
-                # Left side should be in form: ax + b or ax - b
+                # Left side should be in form: ax + b
                 left = left.replace(' ', '')
                 
                 # Find coefficient of x
-                if 'x' in left:
-                    # Extract the term with x
-                    import re
-                    # Pattern to match ax or ax+b or ax-b
-                    match = re.match(r'([+-]?\d*\.?\d*)\*?x([+-].*)?', left)
-                    if match:
-                        coeff_str = match.group(1)
-                        if coeff_str == '' or coeff_str == '+':
-                            coeff = 1
-                        elif coeff_str == '-':
-                            coeff = -1
-                        else:
-                            coeff = float(coeff_str)
-                        
-                        rest = match.group(2) if match.group(2) else ''
-                        if rest:
-                            # Evaluate the constant term
-                            const = eval(rest)
-                        else:
-                            const = 0
-                        
-                        # Solve: coeff * x + const = right_val
-                        # coeff * x = right_val - const
-                        # x = (right_val - const) / coeff
-                        x_solution = (right_val - const) / coeff
-                        
-                        # Round to 2 decimal places if it's a nice number
-                        if abs(x_solution - round(x_solution, 2)) < 0.0001:
-                            x_solution = round(x_solution, 2)
-                        if x_solution.is_integer():
-                            x_solution = int(x_solution)
-                        
-                        return f"✅ {original}\n\nx = {x_solution}"
+                import re as re_module
+                # Pattern to match ax or ax+b or ax-b
+                match = re_module.match(r'([+-]?\d*\.?\d*)\*?x([+-].*)?', left)
+                if match:
+                    coeff_str = match.group(1)
+                    if coeff_str == '' or coeff_str == '+':
+                        coeff = 1
+                    elif coeff_str == '-':
+                        coeff = -1
+                    else:
+                        coeff = float(coeff_str)
+                    
+                    rest = match.group(2) if match.group(2) else ''
+                    if rest:
+                        const = eval(rest)
+                    else:
+                        const = 0
+                    
+                    # Solve: coeff * x + const = right_val
+                    x_solution = (right_val - const) / coeff
+                    
+                    # Format nicely
+                    if abs(x_solution - round(x_solution, 2)) < 0.0001:
+                        x_solution = round(x_solution, 2)
+                    if isinstance(x_solution, float) and x_solution.is_integer():
+                        x_solution = int(x_solution)
+                    
+                    return f"✅ {original}\n\nx = {x_solution}"
             except Exception as e:
                 pass
             
             # Fallback: brute force method
             solutions = []
             for x_val in range(-1000, 1001):
-                x_float = x_val / 10  # Test decimal values
+                x_float = x_val / 10
                 test_left = left.replace('x', str(x_float))
                 test_right = right.replace('x', str(x_float))
                 try:
@@ -127,7 +118,6 @@ def solve_math(expr):
                     pass
             
             if solutions:
-                # Remove duplicates and sort
                 solutions = sorted(list(set([round(s, 2) for s in solutions])))
                 if len(solutions) == 1:
                     return f"✅ {original}\n\nx = {solutions[0]}"
