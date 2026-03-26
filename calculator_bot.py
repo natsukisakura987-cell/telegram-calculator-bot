@@ -20,16 +20,89 @@ def run_http_server():
     server = HTTPServer(('0.0.0.0', port), HealthHandler)
     server.serve_forever()
 
+def solve_equation(equation):
+    """Solve equations like 2x/3+4=x+2"""
+    try:
+        # Split into left and right
+        left, right = equation.split('=')
+        
+        # Function to evaluate expression for a given x
+        def evaluate(expr, x_val):
+            # Replace x with value
+            expr_val = expr.replace('x', f'({x_val})')
+            # Handle fractions like 2x/3
+            expr_val = expr_val.replace('/', '/')
+            try:
+                return eval(expr_val)
+            except:
+                return None
+        
+        # Find solution by binary search
+        # First, find a range where left - right changes sign
+        step = 1
+        found_range = False
+        lower_bound = -100
+        upper_bound = 100
+        lower_val = evaluate(left, lower_bound) - evaluate(right, lower_bound)
+        
+        if lower_val is None:
+            return None
+        
+        for x_test in range(-100, 101):
+            x_val = x_test
+            diff = evaluate(left, x_val) - evaluate(right, x_val)
+            if diff is None:
+                continue
+            if diff * lower_val < 0:  # Sign change found
+                found_range = True
+                upper_bound = x_val
+                break
+            lower_val = diff
+            lower_bound = x_val
+        
+        if not found_range:
+            # Try with more precision
+            for x_test in range(-1000, 1001):
+                x_val = x_test / 10
+                diff = evaluate(left, x_val) - evaluate(right, x_val)
+                if diff is None:
+                    continue
+                if abs(diff) < 0.0001:
+                    return x_val
+                if diff * lower_val < 0:
+                    found_range = True
+                    upper_bound = x_val
+                    break
+                lower_val = diff
+                lower_bound = x_val
+        
+        if found_range:
+            # Binary search for exact solution
+            for _ in range(50):  # 50 iterations for precision
+                mid = (lower_bound + upper_bound) / 2
+                diff = evaluate(left, mid) - evaluate(right, mid)
+                if diff is None:
+                    break
+                if abs(diff) < 0.0001:
+                    return mid
+                if diff * (evaluate(left, lower_bound) - evaluate(right, lower_bound)) > 0:
+                    lower_bound = mid
+                else:
+                    upper_bound = mid
+            return (lower_bound + upper_bound) / 2
+        
+        return None
+        
+    except Exception as e:
+        return None
+
 def solve_math(expr):
     try:
         expr = expr.strip()
         original = expr
         
-        # Convert √ to sqrt()
-        expr = re.sub(r'√(\d+)', r'sqrt(\1)', expr)
-        expr = re.sub(r'√(\d+\.\d+)', r'sqrt(\1)', expr)
-        
-        # Convert ^ to **
+        # Handle special symbols
+        expr = expr.replace('√', 'sqrt')
         expr = expr.replace('^', '**')
         
         # Handle trig functions
@@ -45,8 +118,7 @@ def solve_math(expr):
                 return str(round(math.tan(rad), 6))
             return m.group(0)
         
-        # Apply trig replacement (only on numbers, not on variables)
-        # First, save the positions of variables
+        # Replace trig with values
         expr = re.sub(r'(sin|cos|tan)\((\d+)\)', trig_calc, expr)
         
         # Handle sqrt
@@ -56,79 +128,29 @@ def solve_math(expr):
         
         expr = re.sub(r'sqrt\((\d+)\)', sqrt_calc, expr)
         
-        # Handle equations
+        # Check if it's an equation
         if '=' in expr:
-            parts = expr.split('=')
-            left = parts[0]
-            right = parts[1]
+            # Solve the equation
+            solution = solve_equation(expr)
             
-            # Evaluate constants on both sides first (replace numbers and trig results)
-            # But keep x as x
-            
-            # Create a function to evaluate without x
-            def evaluate_without_x(expression):
-                # Replace x with a placeholder, but we need to evaluate constants
-                # For now, just evaluate if there's no x
-                if 'x' not in expression:
-                    try:
-                        return eval(expression)
-                    except:
-                        return None
-                return None
-            
-            # Try to solve by brute force with higher precision
-            solutions = []
-            # Test from -100 to 100 with 0.01 increments
-            for x_val in range(-10000, 10001):
-                x_float = x_val / 100  # 0.01 increments
-                
-                # Replace x in left and right
-                left_test = left.replace('x', str(x_float))
-                right_test = right.replace('x', str(x_float))
-                
-                try:
-                    # Evaluate both sides
-                    left_val = eval(left_test)
-                    right_val = eval(right_test)
-                    
-                    # Check if they're approximately equal
-                    if abs(left_val - right_val) < 0.0001:
-                        solutions.append(round(x_float, 4))
-                        # If we found 3 solutions, break to save time
-                        if len(solutions) > 3:
-                            break
-                except:
-                    pass
-            
-            if solutions:
-                # Remove duplicates and sort
-                solutions = sorted(list(set(solutions)))
-                if len(solutions) == 1:
-                    x_result = solutions[0]
-                    # Format nicely
-                    if abs(x_result - round(x_result)) < 0.0001:
-                        x_result = int(round(x_result))
-                    elif abs(x_result - round(x_result, 2)) < 0.0001:
-                        x_result = round(x_result, 2)
-                    else:
-                        x_result = round(x_result, 4)
-                    return f"✅ {original}\n\nx = {x_result}"
+            if solution is not None:
+                # Format the solution nicely
+                if abs(solution - round(solution)) < 0.0001:
+                    solution = int(round(solution))
                 else:
-                    return f"✅ {original}\n\nx = {solutions}"
+                    solution = round(solution, 4)
+                return f"✅ {original}\n\nx = {solution}"
             else:
                 return f"✅ {original}\n\nx = (could not solve)"
         
-        # Add multiplication: 2x -> 2*x (but only for non-equation expressions)
-        expr = re.sub(r'(\d+)([a-zA-Z])', r'\1*\2', expr)
-        
-        # Calculate result for non-equation expressions
+        # For non-equations, just calculate
         result = eval(expr)
         if isinstance(result, float) and result.is_integer():
             result = int(result)
         return f"✅ {original}\n= {result}"
         
     except Exception as e:
-        return f"❌ Error: {str(e)}\n\nTry:\n3x+2=5\nx/2+3=7\n2x/3+4=x+2"
+        return f"❌ Error: {str(e)}\n\nTry:\n3x+2=5\n2x/3+4=x+2\nx/2+3=7"
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
