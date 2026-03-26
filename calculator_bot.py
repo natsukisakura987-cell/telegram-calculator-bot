@@ -25,10 +25,8 @@ def solve_math(expr):
         expr = expr.strip()
         original = expr
         
-        # CRITICAL FIX: Convert √100 to sqrt(100) first
-        # Handle √ followed by number (no parentheses)
+        # Convert √ to sqrt()
         expr = re.sub(r'√(\d+)', r'sqrt(\1)', expr)
-        # Also handle √ with decimal
         expr = re.sub(r'√(\d+\.\d+)', r'sqrt(\1)', expr)
         
         # Convert ^ to **
@@ -47,10 +45,9 @@ def solve_math(expr):
                 return str(round(math.tan(rad), 6))
             return m.group(0)
         
-        # Apply trig replacement
         expr = re.sub(r'(sin|cos|tan)\((\d+)\)', trig_calc, expr)
         
-        # Handle sqrt after converting √ to sqrt()
+        # Handle sqrt
         def sqrt_calc(m):
             num = float(m.group(1))
             return str(math.sqrt(num))
@@ -60,41 +57,96 @@ def solve_math(expr):
         # Add multiplication: 2x -> 2*x
         expr = re.sub(r'(\d+)([a-zA-Z])', r'\1*\2', expr)
         
-        # Handle equations
+        # Handle equations with variables on both sides
         if '=' in expr:
             parts = expr.split('=')
             left = parts[0]
             right = parts[1]
             
             try:
-                right_val = eval(right)
-                left = left.replace(' ', '')
-                
-                import re as re_module
-                match = re_module.match(r'([+-]?\d*\.?\d*)\*?x([+-].*)?', left)
-                if match:
-                    coeff_str = match.group(1)
-                    if coeff_str == '' or coeff_str == '+':
-                        coeff = 1
-                    elif coeff_str == '-':
-                        coeff = -1
-                    else:
-                        coeff = float(coeff_str)
+                # Check if x appears on both sides
+                if 'x' in left and 'x' in right:
+                    # Move all x terms to left, constants to right
+                    # For equation: ax + b = cx + d
+                    # (a - c)x = d - b
+                    # x = (d - b) / (a - c)
                     
-                    rest = match.group(2) if match.group(2) else ''
-                    if rest:
-                        const = eval(rest)
-                    else:
+                    # Extract coefficient of x on left
+                    import re as re_module
+                    
+                    def get_coeff_and_const(expression):
+                        expr = expression.replace(' ', '')
+                        coeff = 0
                         const = 0
+                        
+                        # Find x term
+                        x_match = re_module.search(r'([+-]?\d*\.?\d*)\*?x', expr)
+                        if x_match:
+                            coeff_str = x_match.group(1)
+                            if coeff_str == '' or coeff_str == '+':
+                                coeff = 1
+                            elif coeff_str == '-':
+                                coeff = -1
+                            else:
+                                coeff = float(coeff_str)
+                            # Remove x term from expression
+                            expr = re_module.sub(r'[+-]?\d*\.?\d*\*?x', '', expr, count=1)
+                        
+                        # Evaluate remaining constant
+                        if expr and expr != '':
+                            # Handle multiple terms
+                            expr = expr.replace('--', '+')
+                            expr = expr.replace('+-', '-')
+                            if expr:
+                                const = eval(expr)
+                        
+                        return coeff, const
                     
-                    x_solution = (right_val - const) / coeff
+                    a, b = get_coeff_and_const(left)
+                    c, d = get_coeff_and_const(right)
                     
-                    if abs(x_solution - round(x_solution, 2)) < 0.0001:
-                        x_solution = round(x_solution, 2)
+                    # Solve (a - c)x = d - b
+                    x_solution = (d - b) / (a - c)
+                    
+                    # Format nicely
+                    if abs(x_solution - round(x_solution, 4)) < 0.0001:
+                        x_solution = round(x_solution, 4)
                     if isinstance(x_solution, float) and x_solution.is_integer():
                         x_solution = int(x_solution)
                     
                     return f"✅ {original}\n\nx = {x_solution}"
+                
+                # Simple equation with x only on one side
+                else:
+                    right_val = eval(right)
+                    left = left.replace(' ', '')
+                    
+                    import re as re_module
+                    match = re_module.match(r'([+-]?\d*\.?\d*)\*?x([+-].*)?', left)
+                    if match:
+                        coeff_str = match.group(1)
+                        if coeff_str == '' or coeff_str == '+':
+                            coeff = 1
+                        elif coeff_str == '-':
+                            coeff = -1
+                        else:
+                            coeff = float(coeff_str)
+                        
+                        rest = match.group(2) if match.group(2) else ''
+                        if rest:
+                            const = eval(rest)
+                        else:
+                            const = 0
+                        
+                        x_solution = (right_val - const) / coeff
+                        
+                        if abs(x_solution - round(x_solution, 4)) < 0.0001:
+                            x_solution = round(x_solution, 4)
+                        if isinstance(x_solution, float) and x_solution.is_integer():
+                            x_solution = int(x_solution)
+                        
+                        return f"✅ {original}\n\nx = {x_solution}"
+                        
             except Exception as e:
                 pass
             
@@ -113,7 +165,7 @@ def solve_math(expr):
                     pass
             
             if solutions:
-                solutions = sorted(list(set([round(s, 2) for s in solutions])))
+                solutions = sorted(list(set([round(s, 4) for s in solutions])))
                 if len(solutions) == 1:
                     return f"✅ {original}\n\nx = {solutions[0]}"
                 else:
@@ -128,18 +180,17 @@ def solve_math(expr):
         return f"✅ {original}\n= {result}"
         
     except Exception as e:
-        return f"❌ Error: {str(e)}\n\nTry:\n3x+2=5\n2x+cos(60)=5\n√16+2"
+        return f"❌ Error: {str(e)}\n\nTry:\n3x+2=5\n5x+5=34-x\n√16+2"
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "🧮 Math Bot\n\n"
         "Type any math problem:\n"
         "• 3x+2=5\n"
+        "• 5x+5=34-x\n"
         "• 2x+cos(60)=5\n"
-        "• √16+2\n"
         "• √100+2^3-sin(30)\n"
-        "• sin(30)+cos(60)\n"
-        "• 2^3+4"
+        "• sin(30)+cos(60)"
     )
 
 async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
