@@ -45,6 +45,8 @@ def solve_math(expr):
                 return str(round(math.tan(rad), 6))
             return m.group(0)
         
+        # Apply trig replacement (only on numbers, not on variables)
+        # First, save the positions of variables
         expr = re.sub(r'(sin|cos|tan)\((\d+)\)', trig_calc, expr)
         
         # Handle sqrt
@@ -54,55 +56,70 @@ def solve_math(expr):
         
         expr = re.sub(r'sqrt\((\d+)\)', sqrt_calc, expr)
         
-        # Add multiplication: 2x -> 2*x
-        expr = re.sub(r'(\d+)([a-zA-Z])', r'\1*\2', expr)
-        
         # Handle equations
         if '=' in expr:
             parts = expr.split('=')
             left = parts[0]
             right = parts[1]
             
-            try:
-                # Evaluate right side first (might contain trig, sqrt, etc.)
-                right_val = eval(right)
-                
-                # For equations like x/2+3=7, we need to solve for x
-                # Create a function that solves by isolating x
-                
-                # Try different x values to find solution (brute force with high precision)
-                solutions = []
-                # Test decimal values from -100 to 100 with 0.01 increments
-                for x_val in range(-10000, 10001):
-                    x_float = x_val / 100  # 0.01 increments
-                    test_left = left.replace('x', str(x_float))
+            # Evaluate constants on both sides first (replace numbers and trig results)
+            # But keep x as x
+            
+            # Create a function to evaluate without x
+            def evaluate_without_x(expression):
+                # Replace x with a placeholder, but we need to evaluate constants
+                # For now, just evaluate if there's no x
+                if 'x' not in expression:
                     try:
-                        left_val = eval(test_left)
-                        if abs(left_val - right_val) < 0.0001:
-                            solutions.append(round(x_float, 4))
+                        return eval(expression)
                     except:
-                        pass
+                        return None
+                return None
+            
+            # Try to solve by brute force with higher precision
+            solutions = []
+            # Test from -100 to 100 with 0.01 increments
+            for x_val in range(-10000, 10001):
+                x_float = x_val / 100  # 0.01 increments
                 
-                if solutions:
-                    # Remove duplicates and sort
-                    solutions = sorted(list(set(solutions)))
-                    if len(solutions) == 1:
-                        x_result = solutions[0]
-                        # Format nicely
-                        if abs(x_result - round(x_result)) < 0.0001:
-                            x_result = int(round(x_result))
-                        elif abs(x_result - round(x_result, 2)) < 0.0001:
-                            x_result = round(x_result, 2)
-                        else:
-                            x_result = round(x_result, 4)
-                        return f"✅ {original}\n\nx = {x_result}"
+                # Replace x in left and right
+                left_test = left.replace('x', str(x_float))
+                right_test = right.replace('x', str(x_float))
+                
+                try:
+                    # Evaluate both sides
+                    left_val = eval(left_test)
+                    right_val = eval(right_test)
+                    
+                    # Check if they're approximately equal
+                    if abs(left_val - right_val) < 0.0001:
+                        solutions.append(round(x_float, 4))
+                        # If we found 3 solutions, break to save time
+                        if len(solutions) > 3:
+                            break
+                except:
+                    pass
+            
+            if solutions:
+                # Remove duplicates and sort
+                solutions = sorted(list(set(solutions)))
+                if len(solutions) == 1:
+                    x_result = solutions[0]
+                    # Format nicely
+                    if abs(x_result - round(x_result)) < 0.0001:
+                        x_result = int(round(x_result))
+                    elif abs(x_result - round(x_result, 2)) < 0.0001:
+                        x_result = round(x_result, 2)
                     else:
-                        return f"✅ {original}\n\nx = {solutions}"
+                        x_result = round(x_result, 4)
+                    return f"✅ {original}\n\nx = {x_result}"
                 else:
-                    return f"✅ {original}\n\nx = (could not solve)"
-                        
-            except Exception as e:
-                return f"❌ Error solving: {str(e)}"
+                    return f"✅ {original}\n\nx = {solutions}"
+            else:
+                return f"✅ {original}\n\nx = (could not solve)"
+        
+        # Add multiplication: 2x -> 2*x (but only for non-equation expressions)
+        expr = re.sub(r'(\d+)([a-zA-Z])', r'\1*\2', expr)
         
         # Calculate result for non-equation expressions
         result = eval(expr)
@@ -111,14 +128,14 @@ def solve_math(expr):
         return f"✅ {original}\n= {result}"
         
     except Exception as e:
-        return f"❌ Error: {str(e)}\n\nTry:\n3x+2=5\nx/2+3=7\n√16+2"
+        return f"❌ Error: {str(e)}\n\nTry:\n3x+2=5\nx/2+3=7\n2x/3+4=x+2"
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "🧮 Math Bot\n\n"
         "Type any math problem:\n"
         "• 3x+2=5\n"
-        "• 5x+5=34-x\n"
+        "• 2x/3+4=x+2\n"
         "• x/2+3=7\n"
         "• 2x+cos(60)=5\n"
         "• √100+2^3-sin(30)"
