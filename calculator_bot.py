@@ -20,112 +20,80 @@ def run_http_server():
     server = HTTPServer(('0.0.0.0', port), HealthHandler)
     server.serve_forever()
 
-def solve_equation(equation):
-    """Solve linear equations with fractions, decimals, x on both sides"""
+def evaluate_expression(expr, x_val):
+    """Evaluate expression with given x value"""
     try:
-        # Split into left and right
+        # Replace x with value
+        expr_val = expr.replace('x', str(x_val))
+        
+        # Convert 5x to 5*x
+        expr_val = re.sub(r'(\d+)([a-zA-Z])', r'\1*\2', expr_val)
+        
+        # Handle trig
+        def trig_calc(m):
+            func = m.group(1)
+            deg = float(m.group(2))
+            rad = math.radians(deg)
+            if func == 'sin':
+                return str(round(math.sin(rad), 10))
+            if func == 'cos':
+                return str(round(math.cos(rad), 10))
+            if func == 'tan':
+                return str(round(math.tan(rad), 10))
+            return m.group(0)
+        
+        expr_val = re.sub(r'(sin|cos|tan)\((\d+)\)', trig_calc, expr_val)
+        
+        # Handle sqrt
+        def sqrt_calc(m):
+            return str(math.sqrt(float(m.group(1))))
+        
+        expr_val = re.sub(r'sqrt\((\d+)\)', sqrt_calc, expr_val)
+        
+        # Handle fractions like x/3
+        expr_val = expr_val.replace('/', '/')
+        
+        return eval(expr_val)
+    except:
+        return None
+
+def solve_equation(equation):
+    """Solve linear equation by brute force search"""
+    try:
         left, right = equation.split('=')
         
-        # Function to convert expression to a standard form: ax + b
-        def to_standard_form(expr):
-            # Replace √ and ^
-            expr = expr.replace('√', 'sqrt')
-            expr = expr.replace('^', '**')
-            
-            # Handle trig functions
-            def trig_calc(m):
-                func = m.group(1)
-                deg = float(m.group(2))
-                rad = math.radians(deg)
-                if func == 'sin':
-                    return str(round(math.sin(rad), 10))
-                if func == 'cos':
-                    return str(round(math.cos(rad), 10))
-                if func == 'tan':
-                    return str(round(math.tan(rad), 10))
-                return m.group(0)
-            
-            expr = re.sub(r'(sin|cos|tan)\((\d+)\)', trig_calc, expr)
-            
-            # Handle sqrt
-            def sqrt_calc(m):
-                return str(math.sqrt(float(m.group(1))))
-            
-            expr = re.sub(r'sqrt\((\d+)\)', sqrt_calc, expr)
-            
-            # Replace x with a placeholder to evaluate constants
-            # We'll use brute force to find coefficient and constant
-            # Method: Evaluate at x=0 and x=1 to get constants
-            try:
-                # At x = 0, we get the constant term
-                expr_at_0 = expr.replace('x', '0')
-                expr_at_0 = re.sub(r'(\d+)([a-zA-Z])', r'\1*\2', expr_at_0)
-                const = eval(expr_at_0)
-                
-                # At x = 1, we get coefficient + constant
-                expr_at_1 = expr.replace('x', '1')
-                expr_at_1 = re.sub(r'(\d+)([a-zA-Z])', r'\1*\2', expr_at_1)
-                val_at_1 = eval(expr_at_1)
-                
-                # Coefficient = (value at 1) - (value at 0)
-                coeff = val_at_1 - const
-                
-                return coeff, const
-            except:
-                # Fallback: brute force to find coefficient
-                for x_val in range(-1000, 1001):
-                    x_float = x_val / 100
-                    expr_at_x = expr.replace('x', str(x_float))
-                    expr_at_x = re.sub(r'(\d+)([a-zA-Z])', r'\1*\2', expr_at_x)
-                    try:
-                        # Try to find pattern
-                        pass
-                    except:
-                        pass
-                return None, None
-        
-        # Parse both sides
-        left_coeff, left_const = to_standard_form(left)
-        right_coeff, right_const = to_standard_form(right)
-        
-        if left_coeff is not None and right_coeff is not None:
-            # Solve: left_coeff * x + left_const = right_coeff * x + right_const
-            # (left_coeff - right_coeff) * x = right_const - left_const
-            coeff_diff = left_coeff - right_coeff
-            const_diff = right_const - left_const
-            
-            if abs(coeff_diff) > 0.0001:
-                solution = const_diff / coeff_diff
-                # Format nicely
-                if abs(solution - round(solution)) < 0.0001:
-                    solution = int(round(solution))
-                else:
-                    solution = round(solution, 4)
-                return solution
-        
-        # Fallback: brute force search
-        left_expr = left
-        right_expr = right
+        # Search for x from -100 to 100 with fine steps
+        best_x = None
+        best_diff = float('inf')
         
         for x_val in range(-10000, 10001):
-            x_float = x_val / 100
-            test_left = left_expr.replace('x', str(x_float))
-            test_right = right_expr.replace('x', str(x_float))
-            test_left = re.sub(r'(\d+)([a-zA-Z])', r'\1*\2', test_left)
-            test_right = re.sub(r'(\d+)([a-zA-Z])', r'\1*\2', test_right)
+            x_float = x_val / 100  # 0.01 increments
             
-            try:
-                left_val = eval(test_left)
-                right_val = eval(test_right)
-                if abs(left_val - right_val) < 0.0001:
+            left_val = evaluate_expression(left, x_float)
+            right_val = evaluate_expression(right, x_float)
+            
+            if left_val is not None and right_val is not None:
+                diff = abs(left_val - right_val)
+                if diff < 0.0001:
+                    # Exact match found
                     solution = x_float
                     if abs(solution - round(solution)) < 0.0001:
                         solution = int(round(solution))
                     else:
                         solution = round(solution, 4)
                     return solution
-            except:
-                pass
+                if diff < best_diff:
+                    best_diff = diff
+                    best_x = x_float
+        
+        # If no exact match but close enough
+        if best_x is not None and best_diff < 0.01:
+            solution = best_x
+            if abs(solution - round(solution)) < 0.0001:
+                solution = int(round(solution))
+            else:
+                solution = round(solution, 4)
+            return solution
         
         return None
     except Exception as e:
@@ -150,7 +118,6 @@ def solve_math(expr):
                 return f"✅ {original}\n\nx = (could not solve)"
         
         # For non-equations
-        # Handle trig first
         def trig_calc(m):
             func = m.group(1)
             deg = float(m.group(2))
@@ -186,12 +153,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "🧮 Math Bot\n\n"
         "Type any equation:\n"
-        "• 3x+2=5\n"
-        "• 5x+5=34-x\n"
-        "• x/3+5=2x-4\n"
-        "• 2x/3+4=x+2\n"
-        "• 3x+√16=2x+8\n"
-        "• 2x+sin(30)=5\n\n"
+        "• 3x+2=5 → x=1\n"
+        "• 5x+5=34-x → x=4.8333\n"
+        "• x/3+5=2x-4 → x=5.4\n"
+        "• 2x/3+4=x+2 → x=6\n"
+        "• x/2+3=7 → x=8\n\n"
         "Bot by @KanKann_calc_bot"
     )
 
