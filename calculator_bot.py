@@ -5,9 +5,8 @@ import re
 import os
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
-import sympy as sp
 
-TOKEN = "8417018128:AAHAm_2-OP22yzWv3VFPvOGT6-HTNgmspT4"
+TOKEN = "8417018128:AAHk55Bmr2Nx6sgK2lQ5ddfz8zsOE5fduYw"
 
 # HTTP server for Render
 class HealthHandler(BaseHTTPRequestHandler):
@@ -26,100 +25,86 @@ def solve_math(expr):
         expr = expr.strip()
         original = expr
         
-        # Preprocess: convert √ to sqrt, ^ to **
+        # Handle √
         expr = expr.replace('√', 'sqrt')
         expr = expr.replace('^', '**')
         
-        # Convert trig: sin(30) -> sin(30*pi/180) for degrees
-        def trig_to_rad(m):
+        # Convert 5x to 5*x
+        expr = re.sub(r'(\d+)([a-zA-Z])', r'\1*\2', expr)
+        
+        # Handle trig
+        def trig_calc(m):
             func = m.group(1)
-            deg = int(m.group(2))
-            rad = deg * math.pi / 180
-            return f"{func}({rad})"
+            deg = float(m.group(2))
+            rad = math.radians(deg)
+            if func == 'sin':
+                return str(round(math.sin(rad), 6))
+            if func == 'cos':
+                return str(round(math.cos(rad), 6))
+            if func == 'tan':
+                return str(round(math.tan(rad), 6))
+            return m.group(0)
         
-        expr = re.sub(r'(sin|cos|tan)\((\d+)\)', trig_to_rad, expr)
+        expr = re.sub(r'(sin|cos|tan)\((\d+)\)', trig_calc, expr)
         
-        # Handle sqrt: sqrt(16) -> sqrt(16)
-        # No conversion needed, sympy understands sqrt
+        # Handle sqrt
+        def sqrt_calc(m):
+            return str(math.sqrt(float(m.group(1))))
         
-        # Check if it's an equation
+        expr = re.sub(r'sqrt\((\d+)\)', sqrt_calc, expr)
+        
+        # Handle equations
         if '=' in expr:
-            left, right = expr.split('=', 1)
-            x = sp.Symbol('x')
+            left, right = expr.split('=')
+            right_val = eval(right)
             
-            try:
-                # Parse both sides
-                left_expr = sp.sympify(left)
-                right_expr = sp.sympify(right)
-                
-                # Create equation and solve
-                equation = sp.Eq(left_expr, right_expr)
-                solutions = sp.solve(equation, x)
-                
-                if solutions:
-                    # Get first solution
-                    sol = solutions[0]
-                    
-                    # Convert to nice format
-                    if sol.is_integer:
-                        return f"✅ {original}\n\nx = {int(sol)}"
-                    else:
-                        # Round to 4 decimal places
-                        float_val = float(sol)
-                        if abs(float_val - round(float_val, 4)) < 0.0001:
-                            float_val = round(float_val, 4)
-                        return f"✅ {original}\n\nx = {float_val}"
-                else:
-                    return f"✅ {original}\n\nx = (could not solve)"
-                    
-            except Exception as e:
-                return f"❌ Error: {str(e)}\n\nTry: 3x+2=5"
+            for x_val in range(-1000, 1001):
+                x_float = x_val / 10
+                test_left = left.replace('x', str(x_float))
+                try:
+                    if abs(eval(test_left) - right_val) < 0.0001:
+                        result = int(x_float) if x_float.is_integer() else round(x_float, 4)
+                        return f"✅ {original}\n\nx = {result}"
+                except:
+                    pass
+            return f"✅ {original}\n\nx = (could not solve)"
         
-        # For non-equations, evaluate
-        x = sp.Symbol('x')
-        result = sp.sympify(expr)
-        
-        # If result has x, simplify
-        if result.has(x):
-            simplified = sp.simplify(result)
-            return f"✅ {original}\n= {simplified}"
-        else:
-            # Numeric result
-            numeric = float(result)
-            if numeric.is_integer():
-                numeric = int(numeric)
-            else:
-                numeric = round(numeric, 6)
-            return f"✅ {original}\n= {numeric}"
+        # Regular calculation
+        result = eval(expr)
+        if isinstance(result, float) and result.is_integer():
+            result = int(result)
+        return f"✅ {original}\n= {result}"
         
     except Exception as e:
-        return f"❌ Error: {str(e)}\n\nTry:\n3x+2=5\n2x/3+4=x+2"
+        return f"❌ Error: {str(e)}"
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🧮 Math Bot\n\n"
+        "🧮 Math Bot is online!\n\n"
         "Type any math problem:\n"
         "• 3x+2=5\n"
         "• 2x/3+4=x+2\n"
-        "• x/2+3=7\n"
-        "• 2x+cos(60)=5\n"
-        "• √100+2^3-sin(30)\n\n"
+        "• 5x+5=34-x\n"
+        "• √16+2\n"
+        "• sin(30)+cos(60)\n\n"
         "Bot by @KanKann_calc_bot"
     )
+
+async def ping(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("🏓 Pong! Bot is working!")
 
 async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     result = solve_math(update.message.text)
     await update.message.reply_text(result)
 
 def main():
-    # Start HTTP server
     threading.Thread(target=run_http_server, daemon=True).start()
     
     print("🤖 Bot is starting...")
     
-    # Start bot
     app = Application.builder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("ping", ping))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
     
     app.run_polling()
