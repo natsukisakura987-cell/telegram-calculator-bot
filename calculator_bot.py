@@ -20,59 +20,16 @@ def run_http_server():
     server = HTTPServer(('0.0.0.0', port), HealthHandler)
     server.serve_forever()
 
-def solve_equation(equation):
-    """Solve equations like 5x+5=34-x"""
-    try:
-        # Split into left and right
-        left, right = equation.split('=')
-        
-        # Try to find x by testing values
-        solutions = []
-        
-        # Test x from -100 to 100 with 0.01 increments
-        for x_val in range(-10000, 10001):
-            x_float = x_val / 100
-            
-            # Replace x in left and right
-            left_test = left.replace('x', str(x_float))
-            right_test = right.replace('x', str(x_float))
-            
-            try:
-                # Convert 5x to 5*x for evaluation
-                left_test = re.sub(r'(\d+)([a-zA-Z])', r'\1*\2', left_test)
-                right_test = re.sub(r'(\d+)([a-zA-Z])', r'\1*\2', right_test)
-                
-                left_val = eval(left_test)
-                right_val = eval(right_test)
-                
-                if abs(left_val - right_val) < 0.0001:
-                    solutions.append(x_float)
-                    if len(solutions) > 3:
-                        break
-            except:
-                pass
-        
-        if solutions:
-            # Get the most common solution
-            from collections import Counter
-            solution = Counter([round(s, 4) for s in solutions]).most_common(1)[0][0]
-            if abs(solution - round(solution)) < 0.0001:
-                solution = int(round(solution))
-            return solution
-        return None
-    except:
-        return None
-
 def solve_math(expr):
     try:
         expr = expr.strip()
         original = expr
         
-        # Handle √ symbol
+        # Handle √
         expr = expr.replace('√', 'sqrt')
         expr = expr.replace('^', '**')
         
-        # Handle trig functions
+        # Handle trig
         def trig_calc(m):
             func = m.group(1)
             deg = float(m.group(2))
@@ -93,26 +50,69 @@ def solve_math(expr):
         
         expr = re.sub(r'sqrt\((\d+)\)', sqrt_calc, expr)
         
-        # Check if it's an equation (contains = and x)
-        if '=' in expr and 'x' in expr:
-            solution = solve_equation(expr)
-            if solution is not None:
-                return f"✅ {original}\n\nx = {solution}"
-            else:
-                return f"✅ {original}\n\nx = (could not solve)"
+        # Check if it's an equation
+        if '=' in expr:
+            # Extract left and right
+            left, right = expr.split('=')
+            
+            # First, evaluate the right side if it has no x
+            try:
+                right_val = eval(right)
+            except:
+                right_val = None
+            
+            if right_val is not None:
+                # Simple linear equation solver: ax + b = c
+                # Convert left to standard form
+                left_clean = left.replace(' ', '')
+                
+                # Find coefficient of x
+                if 'x' in left_clean:
+                    # Split into parts
+                    import re as re_mod
+                    
+                    # Get coefficient before x
+                    match = re_mod.search(r'([+-]?\d*\.?\d*)x', left_clean)
+                    if match:
+                        coeff_str = match.group(1)
+                        if coeff_str == '' or coeff_str == '+':
+                            coeff = 1
+                        elif coeff_str == '-':
+                            coeff = -1
+                        else:
+                            coeff = float(coeff_str)
+                    else:
+                        coeff = 0
+                    
+                    # Get constant term
+                    # Remove x term and evaluate remaining
+                    remaining = re_mod.sub(r'[+-]?\d*\.?\d*x', '', left_clean)
+                    if remaining and remaining != '':
+                        if remaining.startswith('+') or remaining.startswith('-'):
+                            const = eval(remaining)
+                        else:
+                            const = eval('+' + remaining) if remaining else 0
+                    else:
+                        const = 0
+                    
+                    # Solve: coeff * x + const = right_val
+                    # coeff * x = right_val - const
+                    # x = (right_val - const) / coeff
+                    if coeff != 0:
+                        x_solution = (right_val - const) / coeff
+                        # Format nicely
+                        if abs(x_solution - round(x_solution)) < 0.0001:
+                            x_solution = int(round(x_solution))
+                        else:
+                            x_solution = round(x_solution, 4)
+                        return f"✅ {original}\n\nx = {x_solution}"
+            
+            return f"✅ {original}\n\nx = (could not solve)"
         
-        # For expressions with x (simplify)
-        if 'x' in expr:
-            # Convert 5x to 5*x for evaluation
-            expr = re.sub(r'(\d+)(x)', r'\1*\2', expr)
-            return f"✅ {original}\n= {expr}"
-        
-        # For regular calculations
+        # For non-equations
         result = eval(expr)
         if isinstance(result, float) and result.is_integer():
             result = int(result)
-        elif isinstance(result, float):
-            result = round(result, 6)
         return f"✅ {original}\n= {result}"
         
     except Exception as e:
@@ -126,12 +126,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• 5x+5=34-x\n"
         "• 2x/3+4=x+2\n"
         "• √16+2\n"
-        "• sin(30)+cos(60)\n\n"
-        "Bot by @KanKann_calc_bot"
+        "• sin(30)+cos(60)"
     )
 
 async def ping(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🏓 Pong! Bot is working!")
+    await update.message.reply_text("🏓 Bot is working!")
 
 async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     result = solve_math(update.message.text)
