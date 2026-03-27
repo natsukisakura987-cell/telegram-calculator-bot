@@ -20,6 +20,76 @@ def run_http_server():
     server = HTTPServer(('0.0.0.0', port), HealthHandler)
     server.serve_forever()
 
+def solve_equation(equation):
+    """Solve linear equations with x on both sides"""
+    try:
+        # Split into left and right
+        left, right = equation.split('=')
+        
+        # Clean up spaces
+        left = left.replace(' ', '')
+        right = right.replace(' ', '')
+        
+        # Function to extract coefficient of x and constant
+        def parse_side(side):
+            # Replace 'x' with '*x' for evaluation
+            side = re.sub(r'(\d+)(x)', r'\1*\2', side)
+            
+            # Find coefficient of x
+            if 'x' in side:
+                # Find x term
+                x_match = re.search(r'([+-]?\d*\.?\d*)\*?x', side)
+                if x_match:
+                    coeff_str = x_match.group(1)
+                    if coeff_str == '' or coeff_str == '+':
+                        coeff = 1
+                    elif coeff_str == '-':
+                        coeff = -1
+                    else:
+                        coeff = float(coeff_str)
+                else:
+                    coeff = 0
+                
+                # Remove x term to get constant
+                without_x = re.sub(r'[+-]?\d*\.?\d*\*?x', '', side)
+                if without_x and without_x != '':
+                    if without_x.startswith('+') or without_x.startswith('-'):
+                        const = eval(without_x) if without_x else 0
+                    else:
+                        const = eval('+' + without_x) if without_x else 0
+                else:
+                    const = 0
+            else:
+                coeff = 0
+                const = eval(side) if side else 0
+            
+            return coeff, const
+        
+        # Parse both sides
+        left_coeff, left_const = parse_side(left)
+        right_coeff, right_const = parse_side(right)
+        
+        # Solve: left_coeff * x + left_const = right_coeff * x + right_const
+        # (left_coeff - right_coeff) * x = right_const - left_const
+        # x = (right_const - left_const) / (left_coeff - right_coeff)
+        
+        coeff_diff = left_coeff - right_coeff
+        const_diff = right_const - left_const
+        
+        if coeff_diff != 0:
+            solution = const_diff / coeff_diff
+            # Format nicely
+            if abs(solution - round(solution)) < 0.0001:
+                solution = int(round(solution))
+            else:
+                solution = round(solution, 4)
+            return solution
+        
+        return None
+    except Exception as e:
+        print(f"Error parsing equation: {e}")
+        return None
+
 def solve_math(expr):
     try:
         expr = expr.strip()
@@ -52,60 +122,29 @@ def solve_math(expr):
         
         # Check if it's an equation
         if '=' in expr:
-            # Extract left and right
-            left, right = expr.split('=')
+            # First, try to solve with algebraic method
+            solution = solve_equation(expr)
+            if solution is not None:
+                return f"✅ {original}\n\nx = {solution}"
             
-            # First, evaluate the right side if it has no x
+            # Fallback: brute force method
+            left, right = expr.split('=')
             try:
                 right_val = eval(right)
             except:
                 right_val = None
             
             if right_val is not None:
-                # Simple linear equation solver: ax + b = c
-                # Convert left to standard form
-                left_clean = left.replace(' ', '')
-                
-                # Find coefficient of x
-                if 'x' in left_clean:
-                    # Split into parts
-                    import re as re_mod
-                    
-                    # Get coefficient before x
-                    match = re_mod.search(r'([+-]?\d*\.?\d*)x', left_clean)
-                    if match:
-                        coeff_str = match.group(1)
-                        if coeff_str == '' or coeff_str == '+':
-                            coeff = 1
-                        elif coeff_str == '-':
-                            coeff = -1
-                        else:
-                            coeff = float(coeff_str)
-                    else:
-                        coeff = 0
-                    
-                    # Get constant term
-                    # Remove x term and evaluate remaining
-                    remaining = re_mod.sub(r'[+-]?\d*\.?\d*x', '', left_clean)
-                    if remaining and remaining != '':
-                        if remaining.startswith('+') or remaining.startswith('-'):
-                            const = eval(remaining)
-                        else:
-                            const = eval('+' + remaining) if remaining else 0
-                    else:
-                        const = 0
-                    
-                    # Solve: coeff * x + const = right_val
-                    # coeff * x = right_val - const
-                    # x = (right_val - const) / coeff
-                    if coeff != 0:
-                        x_solution = (right_val - const) / coeff
-                        # Format nicely
-                        if abs(x_solution - round(x_solution)) < 0.0001:
-                            x_solution = int(round(x_solution))
-                        else:
-                            x_solution = round(x_solution, 4)
-                        return f"✅ {original}\n\nx = {x_solution}"
+                for x_val in range(-1000, 1001):
+                    x_float = x_val / 10
+                    test_left = left.replace('x', str(x_float))
+                    test_left = re.sub(r'(\d+)([a-zA-Z])', r'\1*\2', test_left)
+                    try:
+                        if abs(eval(test_left) - right_val) < 0.0001:
+                            result = int(x_float) if x_float.is_integer() else round(x_float, 4)
+                            return f"✅ {original}\n\nx = {result}"
+                    except:
+                        pass
             
             return f"✅ {original}\n\nx = (could not solve)"
         
@@ -124,7 +163,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Type any math problem:\n"
         "• 3x+2=5\n"
         "• 5x+5=34-x\n"
-        "• 2x/3+4=x+2\n"
+        "• 2x+3=x+7\n"
         "• √16+2\n"
         "• sin(30)+cos(60)"
     )
