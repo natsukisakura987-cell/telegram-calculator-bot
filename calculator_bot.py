@@ -3,6 +3,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 import math
 import os
 import threading
+import re
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 TOKEN = "8417018128:AAHk55Bmr2Nx6sgK2lQ5ddfz8zsOE5fduYw"
@@ -23,15 +24,15 @@ def calculate(expression):
     try:
         original = expression
         
-        # Replace √ with sqrt()
-        expression = expression.replace('√', 'sqrt(')
-        
-        # Add closing parenthesis if missing: sqrt(16 -> sqrt(16)
-        import re
-        expression = re.sub(r'sqrt\((\d+)(?!\))', r'sqrt(\1)', expression)
+        # Replace × with *
+        expression = expression.replace('×', '*')
+        expression = expression.replace('÷', '/')
         
         # Replace ^ with **
         expression = expression.replace('^', '**')
+        
+        # Handle sqrt - convert sqrt16 to sqrt(16)
+        expression = re.sub(r'sqrt(\d+)', r'sqrt(\1)', expression)
         
         # Handle sin, cos, tan
         expression = expression.replace('sin', 'math.sin')
@@ -39,7 +40,6 @@ def calculate(expression):
         expression = expression.replace('tan', 'math.tan')
         
         # Convert degrees to radians for trig
-        # sin(30) -> math.sin(math.radians(30))
         def convert_trig(m):
             func = m.group(1)
             angle = m.group(2)
@@ -47,7 +47,7 @@ def calculate(expression):
         
         expression = re.sub(r'(math\.(?:sin|cos|tan))\((\d+)\)', convert_trig, expression)
         
-        # Evaluate
+        # Evaluate safely
         result = eval(expression, {"__builtins__": {}}, {"math": math})
         
         # Format result
@@ -60,36 +60,35 @@ def calculate(expression):
         return f"✅ {original} = {result}"
         
     except Exception as e:
-        return f"❌ Error: {original}\n\nTry: 5+3, 10*2, sqrt(16), sin(30)"
+        return f"❌ Error: {original}\n\nPlease use:\n• 25*4 or 25×4\n• sqrt(144)\n• 5+3\n• sin(30)"
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🧮 *Simple Calculator*\n\n"
-        "Send me any calculation:\n"
+        "🧮 *Calculator Bot*\n\n"
+        "Send me any calculation:\n\n"
+        "• `25 * 4` or `25×4` = 100\n"
+        "• `sqrt(144)` = 12\n"
         "• `5 + 3` = 8\n"
-        "• `10 * 2` = 20\n"
-        "• `sqrt(16)` = 4\n"
+        "• `10 / 2` = 5\n"
         "• `2^3` = 8\n"
         "• `sin(30)` = 0.5\n\n"
-        "*Note:* Use `sqrt(16)` instead of √16\n\n"
+        "*Note:* Use `sqrt()` for square roots\n\n"
         "Bot by @KanKann_calc_bot",
         parse_mode="Markdown"
     )
 
 async def ping(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🏓 Pong! Bot is active!")
+    await update.message.reply_text("🏓 Bot is active!")
 
 async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     result = calculate(update.message.text)
     await update.message.reply_text(result)
 
 def main():
-    # Start HTTP server
     threading.Thread(target=run_http_server, daemon=True).start()
     
     print("🤖 Calculator Bot is starting...")
     
-    # Start bot
     app = Application.builder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("ping", ping))
