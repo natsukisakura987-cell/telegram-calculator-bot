@@ -3,7 +3,6 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 import math
 import os
 import threading
-import re
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 TOKEN = "8417018128:AAHk55Bmr2Nx6sgK2lQ5ddfz8zsOE5fduYw"
@@ -20,46 +19,36 @@ def run_http_server():
     server = HTTPServer(('0.0.0.0', port), HealthHandler)
     server.serve_forever()
 
-def calculate(text):
+def calculate(expression):
     try:
-        original = text
+        original = expression
         
-        # Fix: Replace √ with sqrt properly
-        text = text.replace('√', 'math.sqrt')
+        # Replace √ with sqrt()
+        expression = expression.replace('√', 'sqrt(')
         
-        # Handle sqrt with parentheses or without
-        # √144 -> math.sqrt(144)
-        text = re.sub(r'math\.sqrt(\d+)', r'math.sqrt(\1)', text)
+        # Add closing parenthesis if missing: sqrt(16 -> sqrt(16)
+        import re
+        expression = re.sub(r'sqrt\((\d+)(?!\))', r'sqrt(\1)', expression)
         
         # Replace ^ with **
-        text = text.replace('^', '**')
+        expression = expression.replace('^', '**')
         
         # Handle sin, cos, tan
-        def trig(m):
+        expression = expression.replace('sin', 'math.sin')
+        expression = expression.replace('cos', 'math.cos')
+        expression = expression.replace('tan', 'math.tan')
+        
+        # Convert degrees to radians for trig
+        # sin(30) -> math.sin(math.radians(30))
+        def convert_trig(m):
             func = m.group(1)
-            deg = float(m.group(2))
-            rad = math.radians(deg)
-            if func == 'sin':
-                return str(math.sin(rad))
-            elif func == 'cos':
-                return str(math.cos(rad))
-            elif func == 'tan':
-                return str(math.tan(rad))
-            return m.group(0)
+            angle = m.group(2)
+            return f'{func}(math.radians({angle}))'
         
-        text = re.sub(r'(sin|cos|tan)\((\d+)\)', trig, text)
+        expression = re.sub(r'(math\.(?:sin|cos|tan))\((\d+)\)', convert_trig, expression)
         
-        # Safe evaluation
-        allowed_names = {
-            'math': math,
-            'sqrt': math.sqrt,
-            'sin': math.sin,
-            'cos': math.cos,
-            'tan': math.tan,
-            'pi': math.pi
-        }
-        
-        result = eval(text, {"__builtins__": {}}, allowed_names)
+        # Evaluate
+        result = eval(expression, {"__builtins__": {}}, {"math": math})
         
         # Format result
         if isinstance(result, float):
@@ -71,7 +60,7 @@ def calculate(text):
         return f"✅ {original} = {result}"
         
     except Exception as e:
-        return f"❌ Error: {original}\n\nTry: 5+3, 10*2, √16, sin(30)"
+        return f"❌ Error: {original}\n\nTry: 5+3, 10*2, sqrt(16), sin(30)"
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
@@ -79,10 +68,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Send me any calculation:\n"
         "• `5 + 3` = 8\n"
         "• `10 * 2` = 20\n"
-        "• `√16` = 4\n"
+        "• `sqrt(16)` = 4\n"
         "• `2^3` = 8\n"
         "• `sin(30)` = 0.5\n\n"
-        "Just type and I'll calculate!",
+        "*Note:* Use `sqrt(16)` instead of √16\n\n"
+        "Bot by @KanKann_calc_bot",
         parse_mode="Markdown"
     )
 
