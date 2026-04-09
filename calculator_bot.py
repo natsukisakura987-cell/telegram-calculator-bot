@@ -3,7 +3,6 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 import math
 import os
 import threading
-import re
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 TOKEN = "8417018128:AAHk55Bmr2Nx6sgK2lQ5ddfz8zsOE5fduYw"
@@ -24,31 +23,34 @@ def calculate(expression):
     try:
         original = expression
         
-        # Replace × with *
-        expression = expression.replace('×', '*')
-        expression = expression.replace('÷', '/')
+        # Clean the expression
+        calc = expression.strip()
         
-        # Replace ^ with **
-        expression = expression.replace('^', '**')
+        # Replace symbols
+        calc = calc.replace('×', '*')
+        calc = calc.replace('÷', '/')
+        calc = calc.replace('^', '**')
+        calc = calc.replace('√', 'math.sqrt')
         
-        # Handle sqrt - convert sqrt16 to sqrt(16)
-        expression = re.sub(r'sqrt(\d+)', r'sqrt(\1)', expression)
+        # Handle sqrt without parentheses: math.sqrt144 -> math.sqrt(144)
+        import re
+        calc = re.sub(r'math\.sqrt(\d+)', r'math.sqrt(\1)', calc)
         
         # Handle sin, cos, tan
-        expression = expression.replace('sin', 'math.sin')
-        expression = expression.replace('cos', 'math.cos')
-        expression = expression.replace('tan', 'math.tan')
+        calc = calc.replace('sin', 'math.sin')
+        calc = calc.replace('cos', 'math.cos')
+        calc = calc.replace('tan', 'math.tan')
         
-        # Convert degrees to radians for trig
-        def convert_trig(m):
-            func = m.group(1)
-            angle = m.group(2)
+        # Convert degrees to radians for trig functions
+        def deg_to_rad(match):
+            func = match.group(1)
+            angle = match.group(2)
             return f'{func}(math.radians({angle}))'
         
-        expression = re.sub(r'(math\.(?:sin|cos|tan))\((\d+)\)', convert_trig, expression)
+        calc = re.sub(r'(math\.(?:sin|cos|tan))\((\d+)\)', deg_to_rad, calc)
         
-        # Evaluate safely
-        result = eval(expression, {"__builtins__": {}}, {"math": math})
+        # Simple evaluation
+        result = eval(calc, {'math': math})
         
         # Format result
         if isinstance(result, float):
@@ -60,19 +62,17 @@ def calculate(expression):
         return f"✅ {original} = {result}"
         
     except Exception as e:
-        return f"❌ Error: {original}\n\nPlease use:\n• 25*4 or 25×4\n• sqrt(144)\n• 5+3\n• sin(30)"
+        return f"❌ Error: {original}\n\nUse: 5+3, 25*4, sqrt(144), sin(30)"
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "🧮 *Calculator Bot*\n\n"
-        "Send me any calculation:\n\n"
-        "• `25 * 4` or `25×4` = 100\n"
-        "• `sqrt(144)` = 12\n"
+        "Send me any calculation:\n"
         "• `5 + 3` = 8\n"
-        "• `10 / 2` = 5\n"
-        "• `2^3` = 8\n"
-        "• `sin(30)` = 0.5\n\n"
-        "*Note:* Use `sqrt()` for square roots\n\n"
+        "• `25 * 4` = 100\n"
+        "• `sqrt(144)` = 12\n"
+        "• `sin(30)` = 0.5\n"
+        "• `2^3` = 8\n\n"
         "Bot by @KanKann_calc_bot",
         parse_mode="Markdown"
     )
